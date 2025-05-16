@@ -1,0 +1,61 @@
+! pip install git+https://github.com/openai/whisper.git
+! pip install sounddevice wavio
+! pip install ipywebrtc notebook
+!apt install ffmpeg
+!apt-get install libportaudio2
+import os
+import numpy as np
+
+try:
+    import tensorflow  # required in Colab to avoid protobuf compatibility issues
+except ImportError:
+    pass
+
+import torch
+import pandas as pd
+import whisper
+import torchaudio
+
+from ipywebrtc import AudioRecorder, CameraStream
+from IPython.display import Audio, display
+import ipywidgets as widgets
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+f = open("Notes.txt", "x")
+from google.colab import output
+output.enable_custom_widget_manager()
+camera = CameraStream(constraints={'audio': True,'video':False})
+recorder = AudioRecorder(stream=camera)
+recorder
+#stop to record audio 
+with open('recording.webm', 'wb') as f:
+    f.write(recorder.audio.value)
+!ffmpeg -i recording.webm -ac 1 -f wav my_recording.wav -y -hide_banner -loglevel panic
+language_options = whisper.tokenizer.TO_LANGUAGE_CODE
+language_list = list(language_options.keys())
+#select english here, unless speech is in a different language
+task_dropdown = widgets.Dropdown(options=['transcribe', 'translate'], value='transcribe')
+output = widgets.Output()
+display(task_dropdown)
+#select transcribe here, unless you want to translate speech to english
+if lang_dropdown.value == "english":
+  model = whisper.load_model("base.en")
+else:
+  model = whisper.load_model("base")
+print(
+    f"Model is {'multilingual' if model.is_multilingual else 'English-only'} "
+    f"and has {sum(np.prod(p.shape) for p in model.parameters()):,} parameters."
+)
+options = whisper.DecodingOptions(language=lang_dropdown.value, task=task_dropdown.value, without_timestamps=True)
+options
+audio = whisper.load_audio("my_recording.wav")
+audio = whisper.pad_or_trim(audio)
+mel = whisper.log_mel_spectrogram(audio).to(model.device)
+result = model.decode(mel, options)
+result.text
+#^ to review recorded words
+with open("Notes.txt", "a") as f:
+  f.write(str(result.text))
+with open("Notes.txt") as f:
+  print(f.read())
+#^ to review recorded words in the file
